@@ -6,10 +6,18 @@ class DuelingNetwork(object):
         self.hps = hps
         self.training = training
 
+        self._build_network()
+
     def _build_network(self):
         # input
-        # (batch_size, width, height, num_frame_stacked)
-        nhwc = tf.transpose(inputs.frames, [0, 2, 3, 1])
+        input = tf.placeholder(
+                    tf.float32,
+                    shape=[None, self.hps.num_frames, self.hps.pic_height, self.hps.pic_width],
+                    name='input_state')
+        self.input_state = input
+
+        # (batch_size, width, height, num_frame_stacked) = (None, 512, 288, 4)
+        nhwc = tf.transpose(self.input_state, [0, 2, 3, 1])
         self._activation_summary(nhwc)
 
         # conv1
@@ -28,7 +36,7 @@ class DuelingNetwork(object):
                         name='bn1')
         dp1 = tf.layers.dropout(
                         bn1,
-                        rate=self.hps.droput_rate,
+                        rate=self.hps.dropout_rate,
                         training=self.training,
                         name='dropout1' )
 
@@ -48,7 +56,7 @@ class DuelingNetwork(object):
                         name='bn2')
         dp2 = tf.layers.dropout(
                         bn2,
-                        rate=self.hps.droput_rate,
+                        rate=self.hps.dropout_rate,
                         training=self.training,
                         name='dropout2' )
 
@@ -69,7 +77,7 @@ class DuelingNetwork(object):
 
         dp3 = tf.layers.dropout(
                         bn3,
-                        rate=self.hps.droput_rate,
+                        rate=self.hps.dropout_rate,
                         training=self.training,
                         name='dropout3' )
 
@@ -89,7 +97,7 @@ class DuelingNetwork(object):
         q_value = value + (advantage - mean_adv)
         self.q_value = q_value
 
-    def _build_train_op(self):
+    #def _build_train_op(self):
 
 
     def _activation_summary(self, tensor):
