@@ -20,12 +20,15 @@ class DuelingNetwork(object):
 
 
     def _build_network(self):
-        # input
-        input = tf.placeholder(
+        # inputs: state & action
+        input_state = tf.placeholder(
                     tf.float32,
                     shape=[None, self.hps.num_frames, self.hps.pic_height, self.hps.pic_width],
                     name='input_state')
-        self.input_state = input
+        action = tf.placeholder(tf.int32, shape=[None], name='action')
+        self.input_state = input_state
+        self.action = action
+
 
         # (batch_size, width, height, num_frame_stacked) = (None, 512, 288, 4)
         nhwc = tf.transpose(self.input_state, [0, 2, 3, 1])
@@ -105,17 +108,23 @@ class DuelingNetwork(object):
 
         # merge the value stream and advantage stream
         mean_adv = tf.reduce_mean(advantage, axis=1, keep_dims=True, name='mean_adv') #(batch_size, 1)
-        q_value = value + (advantage - mean_adv) #(batch_size, 2) - (batch_size, 1) using broadcast
-        self.q_value = q_value
-        self.pred = tf.argmax(q_value, axis=1) # select action with highest Q value
+        q_value = value + (advantage - mean_adv) #(batch_size, 2) - (batch_size, 1) using broadcast becomes (batch_size, 2)
+        self.q_value = q_value # Q(s,a,theta) for all a, shape (batch_size, num_action)
+
+        # Q(s,a|theta) for selected action, shape (batch_size, 1)
+        # (0, a0), (1, a1), (2, a2) ....
+        index = tf.stack([tf.range(tf.shape(self.action)[0]), self.action], axis=1)
+        # get the position a0 of q_value[0], a1 of q_value[1] ....
+        self.estimatedQ = tf.gather_nd(q_value, index)
+
+        # select action with highest Q value, used for inference Q(s, a|theta)
+        self.pred = tf.argmax(q_value, axis=1)
 
     def _build_train_op(self):
+        targetQ = tf.placeholder(tf.float32, shape=[None, 1], name='y_i') # y_i
+        self.targetQ = targetQ
 
-        target_q = tf.placeholder(tf.float32, shape=[None, 1], name='y_i') # y_i
-
-        # TODO: need to compute Q(s,a|theta)
-
-        loss = tf.square(target_q - estimated_q)
+        loss = tf.square(targetQ - self.estimatedQ)
 
         # the mean and variance of batch norm layers has to be updated manually
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -124,13 +133,13 @@ class DuelingNetwork(object):
             grads_and_vars = optimizer.compute_gradients(loss)
 
             ######## for testing ########
-            for i in grads_and_vars:
-                print('(', i[0],',',i[1],')')
+            #for i in grads_and_vars:
+                #print('(', i[0],',',i[1],')')
             #############################
 
             # since network has 2 streams, scale the gradients by 1/sqrt(2) as stated in the paper
             scale_factor = 1/math.sqrt(2)
-            scaled_grads_and_vars = [(val*scale_factor, name) for val, name in scaled_grads_and_vars]
+            scaled_grads_and_vars = [(val*scale_factor, name) for val, name in grads_and_vars]
 
             # gradient clipping at 10 stated in paper
             clip = self.hps.clip_value
