@@ -17,8 +17,10 @@ class DuelingNetwork(object):
         self.scope_name = scope_name
         with tf.variable_scope(scope_name):
             self._build_network()
+            self.params_for_update = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name)
             if online:
                 self._build_train_op()
+                self._build_summary()
             else:
                 self._build_update_op(self.online_network)
 
@@ -115,21 +117,27 @@ class DuelingNetwork(object):
         q_value = value + (advantage - mean_adv) #(batch_size, 2) - (batch_size, 1) using broadcast becomes (batch_size, 2)
         self.q_value = q_value # Q(s,a,theta) for all a, shape (batch_size, num_action)
 
-        # Q(s,a|theta) for selected action, shape (batch_size, 1)
+
+
+        # get the action with highest Q, or argmax_a' Q(s',a'|theta)
+        self.argmax_a = tf.argmax(q_value, axis=1)
+
+
+        # Q(s, a) for selected action, shape (batch_size, 1)
         # (0, a0), (1, a1), (2, a2) ....
         index = tf.stack([tf.range(tf.shape(self.action)[0]), self.action], axis=1)
         # get the position a0 of q_value[0], a1 of q_value[1] ....
         self.estimatedQ = tf.gather_nd(q_value, index)
 
-        # select action with highest Q value, used for inference Q(s, a|theta)
-        self.pred = tf.argmax(q_value, axis=1)
 
     def _build_train_op(self):
         """Used for training the online network"""
         targetQ = tf.placeholder(tf.float32, shape=[None, 1], name='y_i') # y_i
         self.targetQ = targetQ
 
+        # (y_i - Q(s,a|theta))^2
         loss = tf.square(targetQ - self.estimatedQ)
+        self.loss = loss
 
         # the mean and variance of batch norm layers has to be updated manually
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -151,13 +159,13 @@ class DuelingNetwork(object):
             clipped_grads_and_vars = [(tf.clip_by_value(val, -clip, clip), name) \
                                       for val, name in scaled_grads_and_vars]
 
-            train_op = optimizer.apply_gradients(clipped_grads_and_vars, global_step=self.global_step)
+            self.train_op = optimizer.apply_gradients(clipped_grads_and_vars, global_step=self.global_step)
             self._gradient_summary(clipped_grads_and_vars)
 
     def _build_update_op(self, online_network):
         """Used for updating the target network"""
-        online_params = online_network.get_network_params()
-        target_params = self.get_network_params()
+        online_params = online_network.get_params_for_update()
+        target_params = self.get_params_for_update()
         num_params = len(target_params)
         assert num_params == len(online_params)
 
@@ -177,12 +185,17 @@ class DuelingNetwork(object):
         tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(tensor))
 
     def _gradient_summary(self, grads_and_vars):
-        for grad, name in grads_and_vars:
+        for grad, var in grads_and_vars:
             tf.summary.histogram(var.name + '/gradient', grad)
+
+    def _build_summary(self):
+        tf.summary.scalar('exploring_rate', self.hps.exploring_rate)
+        self.summary = tf.summary.merge_all()
+
 
     def select_action(self, input_state):
         # epsilon-greedy
-        if np.random.rand() < self.exploring_rate:
+        if np.random.rand() < self.hps.exploring_rate:
             action = np.random.choice(num_action)  # Select a random action
         else:
             input_state = np.asarray(input_state).transpose([1, 2, 0]) #(4, 512, 288) => (512, 288, 4)
@@ -193,13 +206,68 @@ class DuelingNetwork(object):
 
         return action
 
-    def train(self, s1, a, r, t, s2):
+    def train(self, s, a, r, t, s2, target_network):
         """Used for online network training"""
-        
+        if not online:
+            raise Exception('train() is for the online network, not the target network')
 
-    def get_network_params(self):
-        return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name)
+        # get argmax_a' Q(s',a' |theta)
+        feed_online = { self.input_state: s2 }
+        a_max = sess.run(self.argmax_a, feed_dict=feed_online)
 
-    def update_target_network(self, online_network):
+        # get y_i
+        targetQ = target_network.get_targetQ(s2, a_max, r, t)
+
+        # compute loss in _build_train_op, loss = (y_i - Q(s,a|theta))^2
+        feed_online_yi = {
+            self.targetQ: targetQ,
+            self.input_state: s,
+            self.action: a
+        }
+        loss, summary, _ = self.sess.run(
+                            [self.loss, self.summary, self.train_op],
+                            feed_dict=feed_online_yi)
+
+        return loss, summary
+
+    def get_targetQ(self, s2, a_max, r, t):
+        """Get y_i from target network"""
+        if online:
+            raise Exception('get_targetQ() is for target network, not the online network!')
+
+        feed = {
+            self.input_state: s2,
+            self.action: a_max
+        }
+
+        # Q(s', a_max(s'|theta)   | theta')
+        Q = self.sess.run(self.estimatedQ, feed_dict=feed) # shape (batch_size, 1)
+
+        # tensor for non-terminal states
+        non_term = r + self.hps.discount_factor * Q
+        cond = tf.equal(t, True)
+
+        # result[i] = r if terminal==True
+        # result[i] = r + discount_factor * Q(s', a_max(s'|theta)   | theta')
+        result = tf.where(cond, r, non_term)
+
+        return result
+
+    def get_params_for_update(self):
+        return self.params_for_update
+
+    def update_target_network(self):
         """Used for target network to update itself"""
+        if self.online:
+            raise Exception('update_target_network() is for updating target network,\
+                             not the online network!')
+
         self.sess.run(self.update_op)
+
+    def lower_exploring_rate(self, episode):
+        if self.hps.exploring_rate > self.hps.min_exploring_rate:
+            self.hps.exploring_rate -= (0.1 - self.hps.min_exploring_rate) / 3000000
+
+    def shutdown_explore(self):
+        # make action selection greedy
+        self.hps.exploring_rate = 0

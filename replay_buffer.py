@@ -1,5 +1,5 @@
 """
-This script is taken directly from
+This script is taken from
 http://pemami4911.github.io/blog/2016/08/21/ddpg-rl.html
 """
 
@@ -46,6 +46,13 @@ class ReplayBuffer(object):
         r_batch = np.array([_[2] for _ in batch])
         t_batch = np.array([_[3] for _ in batch])
         s2_batch = np.array([_[4] for _ in batch])
+
+        # make into (batch_size, 1)
+        s_batch = np.expand_dims(s_batch, axis=1)
+        a_batch = np.expand_dims(a_batch, axis=1)
+        r_batch = np.expand_dims(r_batch, axis=1)
+        t_batch = np.expand_dims(t_batch, axis=1)
+        s2_batch = np.expand_dims(s2_batch, axis=1)
 
         return s_batch, a_batch, r_batch, t_batch, s2_batch
 
