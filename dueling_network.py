@@ -27,6 +27,7 @@ class DuelingNetwork(object):
 
     def _build_network(self):
         # inputs: state & action
+        # shape(None, 4, 512, 288)
         input_state = tf.placeholder(
                     tf.float32,
                     shape=[None, self.hps.num_frames, self.hps.pic_height, self.hps.pic_width],
@@ -118,7 +119,6 @@ class DuelingNetwork(object):
         self.q_value = q_value # Q(s,a,theta) for all a, shape (batch_size, num_action)
 
 
-
         # get the action with highest Q, or argmax_a' Q(s',a'|theta)
         self.argmax_a = tf.argmax(q_value, axis=1)
 
@@ -193,16 +193,17 @@ class DuelingNetwork(object):
         self.summary = tf.summary.merge_all()
 
 
-    def select_action(self, input_state):
+    def select_action(self, input_state, sess=None):
         # epsilon-greedy
         if np.random.rand() < self.hps.exploring_rate:
-            action = np.random.choice(num_action)  # Select a random action
+            action = np.random.choice(self.hps.num_action)  # Select a random action
         else:
-            input_state = np.asarray(input_state).transpose([1, 2, 0]) #(4, 512, 288) => (512, 288, 4)
+            input_state = np.asarray(input_state)
             feed = {
                 self.input_state: input_state[None, :]
             }
-            action = self.sess.run(self.pred, feed_dict=feed)
+            act = self.sess.run(self.argmax_a, feed_dict=feed)
+            action = act[0]
 
         return action
 
@@ -271,3 +272,6 @@ class DuelingNetwork(object):
     def shutdown_explore(self):
         # make action selection greedy
         self.hps.exploring_rate = 0
+
+    def preprocess(self, screen):
+        return np.transpose(screen, [1, 0])

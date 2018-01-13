@@ -54,5 +54,15 @@ if __name__ == '__main__':
         # test if update_target_network() is functioning
         target.update_target_network()
 
-        # populate replay buffer
-        # while buffer.size() < self.hps.buffer_size:
+        input_screens = [online.preprocess(env.getScreenGrayscale())]*4
+
+        while not env.game_over():
+            a = online.select_action(input_screens[-4:])
+            r = env.act(env.getActionSet()[a])
+            te = env.game_over()
+            input_screens.append(online.preprocess(env.getScreenGrayscale()))
+            buffer.add(input_screens[-5:-1], a, r, te, input_screens[-4:])
+
+            # populate buffer
+            if buffer.size() < hps.batch_size*10:
+                continue

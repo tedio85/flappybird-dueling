@@ -41,11 +41,11 @@ class ReplayBuffer(object):
         else:
             batch = random.sample(self.buffer, batch_size)
 
-        s_batch = np.array([_[0] for _ in batch])
-        a_batch = np.array([_[1] for _ in batch])
-        r_batch = np.array([_[2] for _ in batch])
-        t_batch = np.array([_[3] for _ in batch])
-        s2_batch = np.array([_[4] for _ in batch])
+        s_batch = np.asarray([_[0] for _ in batch])
+        a_batch = np.asarray([_[1] for _ in batch])
+        r_batch = np.asarray([_[2] for _ in batch])
+        t_batch = np.asarray([_[3] for _ in batch])
+        s2_batch = np.asarray([_[4] for _ in batch])
 
         # make into (batch_size, 1)
         s_batch = np.expand_dims(s_batch, axis=1)
