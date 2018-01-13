@@ -19,7 +19,8 @@ def get_default_hparams(num_action=2):
                   pic_height=512,
                   num_frames=4,
                   clip_value=10,
-                  dropout_rate=0.1,
+                  dropout_rate=0.1, # droput_keep_prob = 1 - dropout_rate
+                  tau=0.001,
                   lr=1e-4,
                   batch_size=64,
                   training_epochs=10000)

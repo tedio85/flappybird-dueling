@@ -4,19 +4,23 @@ import tensorflow as tf
 
 
 class DuelingNetwork(object):
-    def __init__(self, sess, hps, online=True, training=True):
+    def __init__(self, sess, hps, online=True, online_network=None, training=True):
         self.sess = sess
         self.hps = hps
         self.online = online
+        self.online_network = online_network # paramter for target network
         self.training = training
         self.global_step = tf.train.get_or_create_global_step()
 
 
         scope_name = 'online' if online else 'target'
+        self.scope_name = scope_name
         with tf.variable_scope(scope_name):
             self._build_network()
             if online:
                 self._build_train_op()
+            else:
+                self._build_update_op(self.online_network)
 
 
     def _build_network(self):
@@ -121,6 +125,7 @@ class DuelingNetwork(object):
         self.pred = tf.argmax(q_value, axis=1)
 
     def _build_train_op(self):
+        """Used for training the online network"""
         targetQ = tf.placeholder(tf.float32, shape=[None, 1], name='y_i') # y_i
         self.targetQ = targetQ
 
@@ -147,12 +152,33 @@ class DuelingNetwork(object):
                                       for val, name in scaled_grads_and_vars]
 
             train_op = optimizer.apply_gradients(clipped_grads_and_vars, global_step=self.global_step)
+            self._gradient_summary(clipped_grads_and_vars)
+
+    def _build_update_op(self, online_network):
+        """Used for updating the target network"""
+        online_params = online_network.get_network_params()
+        target_params = self.get_network_params()
+        num_params = len(target_params)
+        assert num_params == len(online_params)
+
+        update_op = [
+            target_params[i].assign(
+                target_params[i] * self.hps.tau + \
+                online_params[i] * (1 - self.hps.tau)
+            )
+            for i in range(num_params)
+        ]
+        self.update_op = update_op
 
 
     def _activation_summary(self, tensor):
         tensor_name = tensor.op.name
         tf.summary.histogram(tensor_name + '/activations', tensor)
         tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(tensor))
+
+    def _gradient_summary(self, grads_and_vars):
+        for grad, name in grads_and_vars:
+            tf.summary.histogram(var.name + '/gradient', grad)
 
     def select_action(self, input_state):
         # epsilon-greedy
@@ -167,4 +193,13 @@ class DuelingNetwork(object):
 
         return action
 
-    #def train(self, s1, a, r, t, s2):
+    def train(self, s1, a, r, t, s2):
+        """Used for online network training"""
+        
+
+    def get_network_params(self):
+        return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name)
+
+    def update_target_network(self, online_network):
+        """Used for target network to update itself"""
+        self.sess.run(self.update_op)
