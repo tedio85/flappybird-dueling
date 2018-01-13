@@ -29,7 +29,9 @@ def get_default_hparams(num_action=2, buffer_size=10**6):
         tau=0.001,
         lr=1e-4,
         batch_size=256,
-        training_episodes=10**6)
+        training_episodes=10**6,
+        ckpt_path='/tmp/md/ted_tmp/flappybird/',
+        summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn')
     return hparams
 
 
@@ -54,15 +56,46 @@ if __name__ == '__main__':
         # test if update_target_network() is functioning
         target.update_target_network()
 
+        # populate buffer
         input_screens = [online.preprocess(env.getScreenGrayscale())]*4
+        while buffer.size() < hps.batch_size*10:
+            game = FlappyBird()
+            env = PLE(
+                game,
+                fps=30,
+                rng=np.random.RandomState(np.random.randint(low=0, high=200000)),
+                display_screen=False)
+            env.reset_game()
+            print('current buffer size: {}'.format(buffer.size()))
+            while not env.game_over():
+                a = online.select_action(input_screens[-4:])
+                r = env.act(env.getActionSet()[a])
+                te = env.game_over()
+                input_screens.append(online.preprocess(env.getScreenGrayscale()))
+                buffer.add(input_screens[-5:-1], a, r, te, input_screens[-4:])
+        print('buffer full!')
 
-        while not env.game_over():
-            a = online.select_action(input_screens[-4:])
-            r = env.act(env.getActionSet()[a])
-            te = env.game_over()
-            input_screens.append(online.preprocess(env.getScreenGrayscale()))
-            buffer.add(input_screens[-5:-1], a, r, te, input_screens[-4:])
+        # restore previously stored
+        ckpt = tf.train.get_checkpoint_state(self.hps.ckpt_dir)
+        init_episode = 0
+        if ckpt and ckpt.model_checkpoint_path:
+            # if checkpoint exists
+            print('restore from ', ckpt.model_checkpoint_path)
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            # assume the name of checkpoint is like '.../ddqn-1000'
+            init_episode = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1])
+            sess.run(tf.assign(online.global_step, init_episode))
 
-            # populate buffer
-            if buffer.size() < hps.batch_size*10:
-                continue
+        for epsode in range(init_episode, self.hps.training_episodes):
+            sess.run(tf.assign(online.global_step, episode))
+
+            # reset game
+            game = FlappyBird()
+            env = PLE(
+                game,
+                fps=30,
+                rng=np.random.RandomState(np.random.randint(low=0, high=200000)),
+                display_screen=False)
+            env.reset_game()
+
+            
