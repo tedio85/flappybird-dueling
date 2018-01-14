@@ -24,6 +24,7 @@ class DuelingNetwork(object):
                 self._build_summary()
             else:
                 self._build_update_op(self.online_network)
+                self._build_targetQ()
 
 
     def _build_network(self):
@@ -180,6 +181,19 @@ class DuelingNetwork(object):
         ]
         self.update_op = update_op
 
+    def _build_targetQ(self):
+        # tensor for non-terminal states: y_i = r + gamma * Q(s', a_max(s'|theta)   | theta')
+        # Q(s', a_max(s'|theta)   | theta')  is of shape (batch_size, 1)
+        self.reward = tf.placeholder(tf.float32, shape=[None], name='reward')
+        reward = tf.reshape(reward, shape=[-1, 1])
+
+        non_term = reward + self.hps.discount_factor * self.estimatedQ
+        cond = tf.equal(t, True)
+
+        # result[i] = r if terminal==True
+        # result[i] = r + discount_factor * Q(s', a_max(s'|theta)   | theta')
+        self.targetQ_result = tf.where(cond, reward, non_term)
+
 
     def _activation_summary(self, tensor):
         tensor_name = tensor.op.name
@@ -241,22 +255,11 @@ class DuelingNetwork(object):
 
         feed = {
             self.input_state: s2,
-            self.action: a_max
+            self.action: a_max,
+            self.reward: r
         }
 
-        # tensor for non-terminal states: y_i = r + gamma * Q(s', a_max(s'|theta)   | theta')
-        # Q(s', a_max(s'|theta)   | theta')  is of shape (batch_size, 1)
-        reward = tf.convert_to_tensor(r, dtype=tf.float32, name='reward')
-        reward = tf.reshape(reward, shape=[-1, 1])
-
-        non_term = reward + self.hps.discount_factor * self.estimatedQ
-        cond = tf.equal(t, True)
-
-        # result[i] = r if terminal==True
-        # result[i] = r + discount_factor * Q(s', a_max(s'|theta)   | theta')
-        result = tf.where(cond, reward, non_term)
-
-        return self.sess.run(result, feed_dict=feed)
+        return self.sess.run(self.targetQ_result, feed_dict=feed)
 
     def get_params_for_update(self):
         return self.params_for_update
