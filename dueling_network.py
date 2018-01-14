@@ -185,8 +185,11 @@ class DuelingNetwork(object):
         # tensor for non-terminal states: y_i = r + gamma * Q(s', a_max(s'|theta)   | theta')
         # Q(s', a_max(s'|theta)   | theta')  is of shape (batch_size, 1)
         self.reward = tf.placeholder(tf.float32, shape=[None], name='reward')
-        reward = tf.reshape(reward, shape=[-1, 1])
-
+        self.t = tf.placeholder(tf.bool, shape=[None], name='terminal_or_not')
+        
+        reward = tf.reshape(self.reward, shape=[-1, 1])
+        t = self.t
+        
         non_term = reward + self.hps.discount_factor * self.estimatedQ
         cond = tf.equal(t, True)
 
@@ -256,7 +259,8 @@ class DuelingNetwork(object):
         feed = {
             self.input_state: s2,
             self.action: a_max,
-            self.reward: r
+            self.reward: r,
+            self.t: t
         }
 
         return self.sess.run(self.targetQ_result, feed_dict=feed)
