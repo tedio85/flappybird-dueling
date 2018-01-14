@@ -24,8 +24,8 @@ def get_default_hparams(num_action=2, buffer_size=10**6):
     hparams = tf.contrib.training.HParams(
         buffer_size=buffer_size,
         num_action=num_action,
-        pic_width=288,
-        pic_height=512,
+        pic_width=144,
+        pic_height=256,
         num_frames=4,
         clip_value=10,
         exploring_rate=0.1,
