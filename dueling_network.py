@@ -192,6 +192,7 @@ class DuelingNetwork(object):
 
     def _build_summary(self):
         tf.summary.scalar('exploring_rate', self.hps.exploring_rate)
+        tf.summary.scalar('loss', self.loss)
         self.summary = tf.summary.merge_all()
 
 
@@ -243,12 +244,12 @@ class DuelingNetwork(object):
             self.action: a_max
         }
 
-        # tensor for non-terminal states: y_i = r + gamma * Q(s', a_max(s'|theta)   | theta') 
+        # tensor for non-terminal states: y_i = r + gamma * Q(s', a_max(s'|theta)   | theta')
         # Q(s', a_max(s'|theta)   | theta')  is of shape (batch_size, 1)
         reward = tf.convert_to_tensor(r, dtype=tf.float32, name='reward')
         reward = tf.reshape(reward, shape=[-1, 1])
-        
-        non_term = reward + self.hps.discount_factor * self.estimatedQ 
+
+        non_term = reward + self.hps.discount_factor * self.estimatedQ
         cond = tf.equal(t, True)
 
         # result[i] = r if terminal==True
@@ -267,7 +268,7 @@ class DuelingNetwork(object):
                              not the online network!')
 
         self.sess.run(self.update_op)
-        
+
     def copy_online_network(self):
         if self.online:
             raise Exception('copy_online_network() is for updating target network,\
@@ -277,7 +278,7 @@ class DuelingNetwork(object):
         self.sess.run(self.update_op)
         self.hps.tau = temp
         print('tau = {}'.format(self.hps.tau))
-    
+
     def update_exploring_rate(self, episode):
         if self.hps.exploring_rate > self.hps.min_exploring_rate:
             self.exp_rate = self.hps.exploring_rate
