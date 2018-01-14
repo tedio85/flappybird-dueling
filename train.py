@@ -24,12 +24,12 @@ def write_log(log_dir, log_msg):
         f.write(log_msg)
     
 
-def get_default_hparams(num_action=2, buffer_size=10**6):
+def get_default_hparams(num_action=2, buffer_size=2*10**4):
     hparams = tf.contrib.training.HParams(
         buffer_size=buffer_size,
         num_action=num_action,
-        pic_width=144,
-        pic_height=256,
+        pic_width=72,
+        pic_height=128,
         num_frames=4,
         clip_value=10,
         exploring_rate=0.1,
@@ -38,7 +38,7 @@ def get_default_hparams(num_action=2, buffer_size=10**6):
         discount_factor=0.99,
         tau=0.001,
         lr=1e-4,
-        batch_size=64,
+        batch_size=50,
         training_episodes=10**6,
         ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_ddqn/',
         summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn/',
@@ -74,7 +74,7 @@ if __name__ == '__main__':
 
         # populate buffer
         input_screens = [online.preprocess(env.getScreenGrayscale())]*4
-        while buffer.size() < hps.batch_size*10:
+        while buffer.size() < hps.batch_size*5:
             game = FlappyBird()
             env = PLE(
                 game,
@@ -82,7 +82,7 @@ if __name__ == '__main__':
                 rng=np.random.RandomState(np.random.randint(low=0, high=200000)),
                 display_screen=False)
             env.reset_game()
-            print('current buffer size: {}/{}'.format(buffer.size(), hps.batch_size*10))
+            print('current buffer size: {}/{}'.format(buffer.size(), hps.batch_size*5))
             write_log(hps.log_path, 
                       'current buffer size: {}/{}\n'.format(buffer.size(), hps.batch_size*10))
             
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
             # for video clip
             video_frames = [env.getScreenRGB()]
-            if (episode+1) % SAVE_VIDEO_AFTER_EPISODES == 0:
+            if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
                 online.shutdown_explore()
 
             step = 0
@@ -140,7 +140,7 @@ if __name__ == '__main__':
                 step += 1
 
                  # record frame
-                if (episode+1) % SAVE_VIDEO_AFTER_EPISODES == 0:
+                if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
                     video_frames.append(env.getScreenRGB())
 
 
@@ -168,5 +168,5 @@ if __name__ == '__main__':
                 saver.save(sess, os.path.join(hps.ckpt_path, 'ddqn.ckpt-{}'.format(episode)))
 
             # save video clip
-            if (episode+1) % SAVE_VIDEO_AFTER_EPISODES == 0:
+            if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
                 utils.make_anim(video_frames, episode, anim_dir=hps.anim_path)

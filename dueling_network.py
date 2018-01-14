@@ -289,5 +289,5 @@ class DuelingNetwork(object):
 
 
     def preprocess(self, screen):
-        screen = skimage.transform.resize(screen, [144, 256])
+        screen = skimage.transform.resize(screen, [72, 128])
         return np.transpose(screen, [1, 0])
