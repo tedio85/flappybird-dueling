@@ -22,7 +22,7 @@ SAVE_CHECKPOINT_AFTER_EPISODES = 1000
 def write_log(log_dir, log_msg):
     with open(log_dir, 'a') as f:
         f.write(log_msg)
-    
+
 
 def get_default_hparams(num_action=2, buffer_size=2*10**4):
     hparams = tf.contrib.training.HParams(
@@ -38,7 +38,7 @@ def get_default_hparams(num_action=2, buffer_size=2*10**4):
         discount_factor=0.99,
         tau=0.001,
         lr=1e-4,
-        batch_size=50,
+        batch_size=256,
         training_episodes=10**6,
         ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_ddqn/',
         summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn/',
@@ -83,9 +83,9 @@ if __name__ == '__main__':
                 display_screen=False)
             env.reset_game()
             print('current buffer size: {}/{}'.format(buffer.size(), hps.batch_size*5))
-            write_log(hps.log_path, 
+            write_log(hps.log_path,
                       'current buffer size: {}/{}\n'.format(buffer.size(), hps.batch_size*10))
-            
+
             while not env.game_over():
                 a = target.select_action(input_screens[-4:])
                 r = env.act(env.getActionSet()[a])
@@ -105,11 +105,12 @@ if __name__ == '__main__':
             saver.restore(sess, ckpt.model_checkpoint_path)
             # assume the name of checkpoint is like '.../ddqn-1000'
             init_episode = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1])
-            sess.run(tf.assign(online.global_step, init_episode))
 
 
+        episode = init_episode
+        update_global_step = tf.assign(online.global_step, episode)
         for episode in range(init_episode, hps.training_episodes):
-            sess.run(tf.assign(online.global_step, episode))
+            sess.run(update_global_step)
 
             # reset game
             game = FlappyBird()
