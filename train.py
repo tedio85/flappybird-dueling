@@ -19,6 +19,10 @@ from dueling_network import DuelingNetwork
 SAVE_VIDEO_AFTER_EPISODES = 500
 SAVE_CHECKPOINT_AFTER_EPISODES = 1000
 
+def write_log(log_dir, log_msg):
+    with open(log_dir, 'a') as f:
+        f.write(log_msg)
+    
 
 def get_default_hparams(num_action=2, buffer_size=10**6):
     hparams = tf.contrib.training.HParams(
@@ -38,7 +42,8 @@ def get_default_hparams(num_action=2, buffer_size=10**6):
         training_episodes=10**6,
         ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_ddqn/',
         summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn/',
-        anim_path='/tmp/md/ted_tmp/flappybird/anim_ddqn/')
+        anim_path='/tmp/md/ted_tmp/flappybird/anim_ddqn/',
+        log_path='/tmp/md/ted_tmp/flappybird/train_log.txt')
     return hparams
 
 
@@ -78,6 +83,9 @@ if __name__ == '__main__':
                 display_screen=False)
             env.reset_game()
             print('current buffer size: {}/{}'.format(buffer.size(), hps.batch_size*10))
+            write_log(hps.log_path, 
+                      'current buffer size: {}/{}\n'.format(buffer.size(), hps.batch_size*10))
+            
             while not env.game_over():
                 a = target.select_action(input_screens[-4:])
                 r = env.act(env.getActionSet()[a])
@@ -85,6 +93,7 @@ if __name__ == '__main__':
                 input_screens.append(online.preprocess(env.getScreenGrayscale()))
                 buffer.add(input_screens[-5:-1], a, r, te, input_screens[-4:])
         print('buffer full!')
+        write_log(hps.log_path, 'buffer full!\n')
 
         # restore previously stored checkpoint
         ckpt = tf.train.get_checkpoint_state(hps.ckpt_path)
@@ -92,6 +101,7 @@ if __name__ == '__main__':
         if ckpt and ckpt.model_checkpoint_path:
             # if checkpoint exists
             print('restore from ', ckpt.model_checkpoint_path)
+            write_log(hps.log_path, 'restore from '+ckpt.model_checkpoint_path+'\n')
             saver.restore(sess, ckpt.model_checkpoint_path)
             # assume the name of checkpoint is like '.../ddqn-1000'
             init_episode = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1])
@@ -121,7 +131,7 @@ if __name__ == '__main__':
             step = 0
             while not env.game_over():
                 cum_reward = 0
-                a = target.select_action(input_screens[-4:])
+                a = online.select_action(input_screens[-4:])
                 r = env.act(env.getActionSet()[a])
                 te = env.game_over()
                 input_screens.append(online.preprocess(env.getScreenGrayscale()))
@@ -146,9 +156,11 @@ if __name__ == '__main__':
             target.update_exploring_rate(episode)
 
             # log information and summaries
-            print(
+            log_info = \
             "[{}] time live:{} cumulated reward: {} exploring rate: {:.4f} loss: {:.4f}".format(
-                                        episode, step, cum_reward, target.exp_rate, loss))
+                                        episode, step, cum_reward, online.exp_rate, loss)
+            print(log_info)
+            write_log(hps.log_path, log_info+'\n')
             writer.add_summary(summary, global_step=episode)
 
             # save checkpoint
@@ -157,7 +169,4 @@ if __name__ == '__main__':
 
             # save video clip
             if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
-                for i in video_frames:
-                    if i is None:
-                        print('NONE!!!!!!')
                 utils.make_anim(video_frames, episode, anim_dir=hps.anim_path)

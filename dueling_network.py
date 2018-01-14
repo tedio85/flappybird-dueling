@@ -270,7 +270,8 @@ class DuelingNetwork(object):
 
     def update_exploring_rate(self, episode):
         if self.hps.exploring_rate > self.hps.min_exploring_rate:
-            self.exp_rate -= (self.hps.exploring_rate - self.hps.min_exploring_rate) / 3000000
+            self.exp_rate = self.hps.exploring_rate
+            self.exp_rate -= (self.hps.exploring_rate - self.hps.min_exploring_rate) * episode / 3000000
 
     def shutdown_explore(self):
         # make action selection greedy
