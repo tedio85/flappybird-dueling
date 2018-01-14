@@ -34,7 +34,7 @@ def get_default_hparams(num_action=2, buffer_size=10**6):
         discount_factor=0.99,
         tau=0.001,
         lr=1e-4,
-        batch_size=256,
+        batch_size=64,
         training_episodes=10**6,
         ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_ddqn/',
         summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn/',
