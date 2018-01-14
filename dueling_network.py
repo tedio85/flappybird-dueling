@@ -11,7 +11,7 @@ class DuelingNetwork(object):
         self.online_network = online_network # paramter for target network
         self.training = training
         self.global_step = tf.train.get_or_create_global_step()
-
+        self.exp_rate = self.hps.exploring_rate
 
         scope_name = 'online' if online else 'target'
         self.scope_name = scope_name
@@ -195,7 +195,7 @@ class DuelingNetwork(object):
 
     def select_action(self, input_state, sess=None):
         # epsilon-greedy
-        if np.random.rand() < self.hps.exploring_rate:
+        if np.random.rand() < self.exp_rate:
             action = np.random.choice(self.hps.num_action)  # Select a random action
         else:
             input_state = np.asarray(input_state)
@@ -265,13 +265,14 @@ class DuelingNetwork(object):
 
         self.sess.run(self.update_op)
 
-    def lower_exploring_rate(self, episode):
+    def update_exploring_rate(self, episode):
         if self.hps.exploring_rate > self.hps.min_exploring_rate:
-            self.hps.exploring_rate -= (0.1 - self.hps.min_exploring_rate) / 3000000
+            self.exp_rate -= (self.hps.exploring_rate - self.hps.min_exploring_rate) / 3000000
 
     def shutdown_explore(self):
         # make action selection greedy
-        self.hps.exploring_rate = 0
+        self.exp_rate = 0
+
 
     def preprocess(self, screen):
         return np.transpose(screen, [1, 0])

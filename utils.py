@@ -1,7 +1,7 @@
 import moviepy.editor as mpy
 import os
 
-def make_anim(images, eppisode, anim_dir='', fps=60, true_image=False):
+def make_anim(images, episode, anim_dir='', fps=60, true_image=False):
     duration = len(images) / fps
 
     def make_frame(t):

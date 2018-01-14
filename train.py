@@ -10,8 +10,14 @@ from ple import PLE
 import tensorflow as tf
 import numpy as np
 
+import utils
 from replay_buffer import ReplayBuffer
 from dueling_network import DuelingNetwork
+
+# constants
+SAVE_VIDEO_AFTER_EPISODES = 500
+SAVE_CHECKPOINT_AFTER_EPISODES = 1000
+
 
 
 def get_default_hparams(num_action=2, buffer_size=10**6):
@@ -30,8 +36,9 @@ def get_default_hparams(num_action=2, buffer_size=10**6):
         lr=1e-4,
         batch_size=256,
         training_episodes=10**6,
-        ckpt_path='/tmp/md/ted_tmp/flappybird/',
-        summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn')
+        ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_ddqn/',
+        summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn/',
+        anim_path='/tmp/md/ted_tmp/flappybird/anim_ddqn/')
     return hparams
 
 
@@ -44,13 +51,17 @@ if __name__ == '__main__':
 
     hps = get_default_hparams(num_action)
 
-    with tf.Session() as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.per_process_gpu_memory_fraction = 0.4
+    with tf.Session(config=config) as sess:
         # initialize network and buffer
         online = DuelingNetwork(sess, hps, online=True,
                                 online_network=None, training=True)
         target = DuelingNetwork(sess, hps, online=False,
                                 online_network=online, training=True)
         buffer = ReplayBuffer(hps.buffer_size)
+        saver = tf.train.Saver(max_to_keep=15)
+        writer = tf.summary.FileWriter(hps.summary_path, sess.graph)
         sess.run(tf.global_variables_initializer())
 
         # test if update_target_network() is functioning
@@ -66,17 +77,17 @@ if __name__ == '__main__':
                 rng=np.random.RandomState(np.random.randint(low=0, high=200000)),
                 display_screen=False)
             env.reset_game()
-            print('current buffer size: {}'.format(buffer.size()))
+            print('current buffer size: {}/{}'.format(buffer.size(), hps.batch_size*10))
             while not env.game_over():
-                a = online.select_action(input_screens[-4:])
+                a = target.select_action(input_screens[-4:])
                 r = env.act(env.getActionSet()[a])
                 te = env.game_over()
                 input_screens.append(online.preprocess(env.getScreenGrayscale()))
                 buffer.add(input_screens[-5:-1], a, r, te, input_screens[-4:])
         print('buffer full!')
 
-        # restore previously stored
-        ckpt = tf.train.get_checkpoint_state(self.hps.ckpt_dir)
+        # restore previously stored checkpoint
+        ckpt = tf.train.get_checkpoint_state(self.hps.ckpt_path)
         init_episode = 0
         if ckpt and ckpt.model_checkpoint_path:
             # if checkpoint exists
@@ -86,7 +97,8 @@ if __name__ == '__main__':
             init_episode = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1])
             sess.run(tf.assign(online.global_step, init_episode))
 
-        for epsode in range(init_episode, self.hps.training_episodes):
+
+        for episode in range(init_episode, self.hps.training_episodes):
             sess.run(tf.assign(online.global_step, episode))
 
             # reset game
@@ -98,4 +110,56 @@ if __name__ == '__main__':
                 display_screen=False)
             env.reset_game()
 
-            
+            # for model input
+            input_screens = [online.preprocess(env.getScreenGrayscale())] * 4
+
+            # for video clip
+            video_frames = [env.getScreenRGB()]
+            if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
+                online.shutdown_explore()
+
+            step = 0
+            while not env.game_over():
+                cum_reward = 0
+                a = target.select_action(input_screens[-4:])
+                r = env.act(env.getActionSet()[a])
+                te = env.game_over()
+                input_screens.append(online.preprocess(env.getScreenGrayscale()))
+                buffer.add(input_screens[-5:-1], a, r, te, input_screens[-4:])
+                cum_reward += r
+                step += 1
+
+                 # record frame
+                if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
+                    video_frames.append(env.getScreenRGB())
+
+
+
+            # sample batch and update online & target network
+            s, a, r, t, s2 = buffer.sample_batch(hps.batch_size)
+            loss, summary = online.train(s, a, r, t, s2, target)
+            target.update_target_network()
+
+
+            # update exploring rate
+            online.update_exploring_rate()
+            target.update_exploring_rate()
+
+            # log information and summaries
+            print("[{}] time live:{},\
+                  cumulated reward: {},\
+                  exploring rate: {},\
+                  loss: {}".format(episode,
+                                   step,
+                                   cum_reward,
+                                   target.exploring_rate,
+                                   loss))
+            writer.add_summary(summary, global_step=episode)
+
+            # save checkpoint
+            if episode % SAVE_CHECKPOINT_AFTER_EPISODES == 0:
+                saver.save(sess, os.path.join(hps.ckpt_path, 'ddqn-{}.ckpt'.format(episode)))
+
+            # save video clip
+            if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
+                utils.make_anim(video_frames, episode, anim_dir=hps.anim_path)
