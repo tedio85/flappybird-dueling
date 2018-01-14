@@ -173,8 +173,8 @@ class DuelingNetwork(object):
 
         update_op = [
             target_params[i].assign(
-                target_params[i] * self.hps.tau + \
-                online_params[i] * (1 - self.hps.tau)
+                online_params[i] * self.hps.tau + \
+                target_params[i] * (1 - self.hps.tau)
             )
             for i in range(num_params)
         ]
@@ -267,7 +267,17 @@ class DuelingNetwork(object):
                              not the online network!')
 
         self.sess.run(self.update_op)
-
+        
+    def copy_online_network(self):
+        if self.online:
+            raise Exception('copy_online_network() is for updating target network,\
+                             not the online network!')
+        temp = self.hps.tau
+        self.hps.tau = 1.00
+        self.sess.run(self.update_op)
+        self.hps.tau = temp
+        print('tau = {}'.format(self.hps.tau))
+    
     def update_exploring_rate(self, episode):
         if self.hps.exploring_rate > self.hps.min_exploring_rate:
             self.exp_rate = self.hps.exploring_rate

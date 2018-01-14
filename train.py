@@ -69,8 +69,8 @@ if __name__ == '__main__':
         writer = tf.summary.FileWriter(hps.summary_path, sess.graph)
         sess.run(tf.global_variables_initializer())
 
-        # test if update_target_network() is functioning
-        target.update_target_network()
+        # copy online network
+        target.copy_online_network()
 
         # populate buffer
         input_screens = [online.preprocess(env.getScreenGrayscale())]*4
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
             # for video clip
             video_frames = [env.getScreenRGB()]
-            if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
+            if (episode+1) % SAVE_VIDEO_AFTER_EPISODES == 0:
                 online.shutdown_explore()
 
             step = 0
@@ -140,7 +140,7 @@ if __name__ == '__main__':
                 step += 1
 
                  # record frame
-                if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
+                if (episode+1) % SAVE_VIDEO_AFTER_EPISODES == 0:
                     video_frames.append(env.getScreenRGB())
 
 
@@ -168,5 +168,5 @@ if __name__ == '__main__':
                 saver.save(sess, os.path.join(hps.ckpt_path, 'ddqn.ckpt-{}'.format(episode)))
 
             # save video clip
-            if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
+            if (episode+1) % SAVE_VIDEO_AFTER_EPISODES == 0:
                 utils.make_anim(video_frames, episode, anim_dir=hps.anim_path)
