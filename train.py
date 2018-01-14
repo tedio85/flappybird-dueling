@@ -9,6 +9,7 @@ from ple import PLE
 
 import tensorflow as tf
 import numpy as np
+import moviepy.editor as mpy
 
 import utils
 from replay_buffer import ReplayBuffer
@@ -17,7 +18,6 @@ from dueling_network import DuelingNetwork
 # constants
 SAVE_VIDEO_AFTER_EPISODES = 500
 SAVE_CHECKPOINT_AFTER_EPISODES = 1000
-
 
 
 def get_default_hparams(num_action=2, buffer_size=10**6):
@@ -87,7 +87,7 @@ if __name__ == '__main__':
         print('buffer full!')
 
         # restore previously stored checkpoint
-        ckpt = tf.train.get_checkpoint_state(self.hps.ckpt_path)
+        ckpt = tf.train.get_checkpoint_state(hps.ckpt_path)
         init_episode = 0
         if ckpt and ckpt.model_checkpoint_path:
             # if checkpoint exists
@@ -98,7 +98,7 @@ if __name__ == '__main__':
             sess.run(tf.assign(online.global_step, init_episode))
 
 
-        for episode in range(init_episode, self.hps.training_episodes):
+        for episode in range(init_episode, hps.training_episodes):
             sess.run(tf.assign(online.global_step, episode))
 
             # reset game
@@ -142,24 +142,22 @@ if __name__ == '__main__':
 
 
             # update exploring rate
-            online.update_exploring_rate()
-            target.update_exploring_rate()
+            online.update_exploring_rate(episode)
+            target.update_exploring_rate(episode)
 
             # log information and summaries
-            print("[{}] time live:{},\
-                  cumulated reward: {},\
-                  exploring rate: {},\
-                  loss: {}".format(episode,
-                                   step,
-                                   cum_reward,
-                                   target.exploring_rate,
-                                   loss))
+            print(
+            "[{}] time live:{} cumulated reward: {} exploring rate: {:.4f} loss: {:.4f}".format(
+                                        episode, step, cum_reward, target.exp_rate, loss))
             writer.add_summary(summary, global_step=episode)
 
             # save checkpoint
             if episode % SAVE_CHECKPOINT_AFTER_EPISODES == 0:
-                saver.save(sess, os.path.join(hps.ckpt_path, 'ddqn-{}.ckpt'.format(episode)))
+                saver.save(sess, os.path.join(hps.ckpt_path, 'ddqn.ckpt-{}'.format(episode)))
 
             # save video clip
             if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
+                for i in video_frames:
+                    if i is None:
+                        print('NONE!!!!!!')
                 utils.make_anim(video_frames, episode, anim_dir=hps.anim_path)

@@ -47,12 +47,6 @@ class ReplayBuffer(object):
         t_batch = np.asarray([_[3] for _ in batch])
         s2_batch = np.asarray([_[4] for _ in batch])
 
-        # make into (batch_size, 1)
-        s_batch = np.expand_dims(s_batch, axis=1)
-        a_batch = np.expand_dims(a_batch, axis=1)
-        r_batch = np.expand_dims(r_batch, axis=1)
-        t_batch = np.expand_dims(t_batch, axis=1)
-        s2_batch = np.expand_dims(s2_batch, axis=1)
 
         return s_batch, a_batch, r_batch, t_batch, s2_batch
 

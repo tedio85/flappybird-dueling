@@ -129,6 +129,7 @@ class DuelingNetwork(object):
         index = tf.stack([tf.range(tf.shape(self.action)[0]), self.action], axis=1)
         # get the position a0 of q_value[0], a1 of q_value[1] ....
         self.estimatedQ = tf.gather_nd(q_value, index)
+        self.estimatedQ = tf.reshape(self.estimatedQ, shape=[-1,1])
 
 
     def _build_train_op(self):
@@ -137,7 +138,7 @@ class DuelingNetwork(object):
         self.targetQ = targetQ
 
         # (y_i - Q(s,a|theta))^2
-        loss = tf.square(targetQ - self.estimatedQ)
+        loss = tf.reduce_mean(tf.square(targetQ - self.estimatedQ))
         self.loss = loss
 
         # the mean and variance of batch norm layers has to be updated manually
@@ -210,12 +211,12 @@ class DuelingNetwork(object):
 
     def train(self, s, a, r, t, s2, target_network):
         """Used for online network training"""
-        if not online:
+        if not self.online:
             raise Exception('train() is for the online network, not the target network')
 
         # get argmax_a' Q(s',a' |theta)
         feed_online = { self.input_state: s2 }
-        a_max = sess.run(self.argmax_a, feed_dict=feed_online)
+        a_max = self.sess.run(self.argmax_a, feed_dict=feed_online)
 
         # get y_i
         targetQ = target_network.get_targetQ(s2, a_max, r, t)
@@ -234,7 +235,7 @@ class DuelingNetwork(object):
 
     def get_targetQ(self, s2, a_max, r, t):
         """Get y_i from target network"""
-        if online:
+        if self.online:
             raise Exception('get_targetQ() is for target network, not the online network!')
 
         feed = {
@@ -242,18 +243,19 @@ class DuelingNetwork(object):
             self.action: a_max
         }
 
-        # Q(s', a_max(s'|theta)   | theta')
-        Q = self.sess.run(self.estimatedQ, feed_dict=feed) # shape (batch_size, 1)
-
-        # tensor for non-terminal states
-        non_term = r + self.hps.discount_factor * Q
+        # tensor for non-terminal states: y_i = r + gamma * Q(s', a_max(s'|theta)   | theta') 
+        # Q(s', a_max(s'|theta)   | theta')  is of shape (batch_size, 1)
+        reward = tf.convert_to_tensor(r, dtype=tf.float32, name='reward')
+        reward = tf.reshape(reward, shape=[-1, 1])
+        
+        non_term = reward + self.hps.discount_factor * self.estimatedQ 
         cond = tf.equal(t, True)
 
         # result[i] = r if terminal==True
         # result[i] = r + discount_factor * Q(s', a_max(s'|theta)   | theta')
-        result = tf.where(cond, r, non_term)
+        result = tf.where(cond, reward, non_term)
 
-        return result
+        return self.sess.run(result, feed_dict=feed)
 
     def get_params_for_update(self):
         return self.params_for_update
