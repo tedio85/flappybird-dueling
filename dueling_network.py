@@ -56,6 +56,7 @@ class DuelingNetwork(object):
                         conv1,
                         axis=-1,
                         training=self.training,
+                        fused=True,
                         name='bn1')
         dp1 = tf.layers.dropout(
                         bn1,
@@ -76,6 +77,7 @@ class DuelingNetwork(object):
                         conv2,
                         axis=-1,
                         training=self.training,
+                        fused=True,
                         name='bn2')
         dp2 = tf.layers.dropout(
                         bn2,
@@ -96,6 +98,7 @@ class DuelingNetwork(object):
                         conv3,
                         axis=-1,
                         training=self.training,
+                        fused=True,
                         name='bn3')
 
         dp3 = tf.layers.dropout(
@@ -186,10 +189,10 @@ class DuelingNetwork(object):
         # Q(s', a_max(s'|theta)   | theta')  is of shape (batch_size, 1)
         self.reward = tf.placeholder(tf.float32, shape=[None], name='reward')
         self.t = tf.placeholder(tf.bool, shape=[None], name='terminal_or_not')
-        
+
         reward = tf.reshape(self.reward, shape=[-1, 1])
         t = self.t
-        
+
         non_term = reward + self.hps.discount_factor * self.estimatedQ
         cond = tf.equal(t, True)
 
