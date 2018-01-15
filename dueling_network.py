@@ -221,7 +221,12 @@ class DuelingNetwork(object):
         if np.random.rand() < self.exp_rate:
             action = np.random.choice(self.hps.num_action)  # Select a random action
         else:
-            input_state = np.asarray(input_state)
+            # in the beginning of the game, the frames might be less than 4
+            if len(input_state) < self.hps.num_frames:
+                diff = self.hps.num_frames - len(input_state) 
+                input_state = [input_state[0] for _ in range(diff)] + input_state 
+                    
+            input_state = np.asarray(input_state[-self.hps.num_frames:])
             feed = {
                 self.input_state: input_state[None, :]
             }

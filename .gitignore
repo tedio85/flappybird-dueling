@@ -3,3 +3,6 @@ __pycache__
 test.ipynb
 .ipynb_checkpoints/
 screenlog.0
+evaluate.pyc
+scores.csv
+evaluate.ipynb
