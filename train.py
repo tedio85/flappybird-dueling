@@ -170,4 +170,5 @@ if __name__ == '__main__':
 
             # save video clip
             if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
-                utils.make_anim(video_frames, episode, anim_dir=hps.anim_path)
+                video_frames = [np.transpose(frame, axes=(1,0,2)) for frame in video_frames]
+                utils.make_anim(video_frames, episode, anim_dir=hps.anim_path, true_image=True)
