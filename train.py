@@ -50,7 +50,7 @@ def get_default_hparams(num_action=2, buffer_size=2*10**4):
 if __name__ == '__main__':
     game = FlappyBird()
     # environment interface to game
-    env = PLE(game, fps=30, display_screen=False)
+    env = PLE(game, fps=30, rng=np.random.RandomState(np.random.randint(low=0, high=20180114)), display_screen=False)
     env.reset_game()
     num_action = len(env.getActionSet())
 
@@ -79,7 +79,7 @@ if __name__ == '__main__':
             env = PLE(
                 game,
                 fps=30,
-                rng=np.random.RandomState(np.random.randint(low=0, high=200000)),
+                rng=np.random.RandomState(np.random.randint(low=0, high=2**32-1)),
                 display_screen=False)
             env.reset_game()
             print('current buffer size: {}/{}'.format(buffer.size(), hps.batch_size*5))
@@ -117,7 +117,7 @@ if __name__ == '__main__':
             env = PLE(
                 game,
                 fps=30,
-                rng=np.random.RandomState(np.random.randint(low=0, high=200000)),
+                rng=np.random.RandomState(np.random.randint(low=0, high=20180114)),
                 display_screen=False)
             env.reset_game()
 
