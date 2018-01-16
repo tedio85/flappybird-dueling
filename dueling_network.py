@@ -223,9 +223,9 @@ class DuelingNetwork(object):
         else:
             # in the beginning of the game, the frames might be less than 4
             if len(input_state) < self.hps.num_frames:
-                diff = self.hps.num_frames - len(input_state) 
-                input_state = [input_state[0] for _ in range(diff)] + input_state 
-                    
+                diff = self.hps.num_frames - len(input_state)
+                input_state = [input_state[0] for _ in range(diff)] + input_state
+
             input_state = np.asarray(input_state[-self.hps.num_frames:])
             feed = {
                 self.input_state: input_state[None, :]
@@ -297,7 +297,7 @@ class DuelingNetwork(object):
     def update_exploring_rate(self, episode):
         if self.hps.exploring_rate > self.hps.min_exploring_rate:
             self.exp_rate = self.hps.exploring_rate
-            self.exp_rate -= (self.hps.exploring_rate - self.hps.min_exploring_rate) * episode / 150000
+            self.exp_rate -= (self.hps.exploring_rate - self.hps.min_exploring_rate) * episode / 3000000
 
     def shutdown_explore(self):
         # make action selection greedy
