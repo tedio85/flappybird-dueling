@@ -193,16 +193,16 @@ if __name__ == '__main__':
                     target.update_target_network()
 
 
-                    # update exploring rate
-                    online.update_exploring_rate(episode)
-                    target.update_exploring_rate(episode)
+                # update exploring rate
+                online.update_exploring_rate(episode)
+                target.update_exploring_rate(episode)
 
-                    # log information and summaries
-                    log_info = \
-                    "[{}] time live:{} cumulated reward: {} exploring rate: {:.4f} loss: {:.4f}".format(
-                                                episode, step, cum_reward, online.exp_rate, loss)
-                    print(log_info)
-                    write_log(hps.log_path, log_info+'\n')
+                # log information and summaries
+                log_info = \
+                "[{}] time live:{} cumulated reward: {} exploring rate: {:.4f} loss: {:.4f}".format(
+                                            episode, step, cum_reward, online.exp_rate, loss)
+                print(log_info)
+                write_log(hps.log_path, log_info+'\n')
 
 
             # save checkpoint
