@@ -13,7 +13,7 @@ import moviepy.editor as mpy
 
 import utils
 from max_heap import MaxHeap
-from rank_based import Experience as ReplayBuffer
+from prioritized_buffer import PrioritizedReplayBuffer as ReplayBuffer
 from dueling_prioritized import DuelingPrioritized
 
 # constants
@@ -69,16 +69,7 @@ if __name__ == '__main__':
                                     online_network=None, training=True)
         target = DuelingPrioritized(sess, hps, online=False,
                                     online_network=online, training=True)
-        buffer_conf = {
-            'size': hps.buffer_size,
-            'alpha': hps.alpha,
-            'beta_zero': hps.beta,
-            'batch_size': hps.batch_size,
-            'learn_start': hps.buffer_size*10,
-            'steps': hps.training_episodes
-        }
-        buffer = ReplayBuffer()
-        maxheap = MaxHeap()
+        buffer = ReplayBuffer(hps.buffer_size, hps.alpha)
         saver = tf.train.Saver(max_to_keep=15)
         writer = tf.summary.FileWriter(hps.summary_path, sess.graph)
         sess.run(tf.global_variables_initializer())
@@ -109,11 +100,10 @@ if __name__ == '__main__':
                 rng=np.random.RandomState(np.random.randint(low=0, high=2**32-1)),
                 display_screen=False)
             env.reset_game()
-            print('current buffer size: {}/{}'.format(buffer.size(), hps.buffer_size))
+            print('current buffer size: {}/{}'.format(records, hps.buffer_size))
             write_log(hps.log_path,
-                      'current buffer size: {}/{}\n'.format(buffer.size(), hps.buffer_size))
+                      'current buffer size: {}/{}\n'.format(records, hps.buffer_size))
 
-            maxheap.clear()
             while not env.game_over():
                 a = target.select_action(input_screens[-4:])
                 r = env.act(env.getActionSet()[a])
@@ -124,12 +114,12 @@ if __name__ == '__main__':
                 td = online.get_TD_error(input_screens[-5:-1], a, r, te, input_screens[-4:],\
                                                target)
                 priority = np.absolute(td) + hps.priority_epsilon
-                data = (priority, input_screens[-5:-1], a, r, te, input_screens[-4:])
+                data = (priority, input_screens[-5:-1], a, r, input_screens[-4:], te)
                 maxheap.push(data)
 
                 # add the sample with maximal abs(TD_error) to replay buffer
                 sample, priority = maxheap.top()
-                buffer.store(sample)
+                buffer.add(*sample)
                 records += 1
 
         print('buffer full!')
@@ -172,12 +162,12 @@ if __name__ == '__main__':
                 td = online.get_TD_error(input_screens[-5:-1], a, r, te, input_screens[-4:],\
                                                target)
                 priority = np.absolute(td) + hps.priority_epsilon
-                data = (priority, input_screens[-5:-1], a, r, te, input_screens[-4:])
+                data = (priority, input_screens[-5:-1], a, r, input_screens[-4:], te)
                 maxheap.push(data)
 
                 # add the sample with maximal abs(TD_error) to replay buffer
                 sample, priority = maxheap.top()
-                buffer.store(sample)
+                buffer.add(*sample)
 
                 cum_reward += r
                 step += 1
@@ -189,19 +179,18 @@ if __name__ == '__main__':
 
                 # sample batch and update online & target network
                 if (step-1) % hps.replay_period == 0:
-                    sample_list, weights, indices = buffer.sample(episode)
+                    s, a, r, s2, t, weights, indices = buffer.sample(hps.batch_size, hps.beta)
                     s, a, r, t, s2 = utils.list_to_batches(sample_list)
                     TD_error = online.get_TD_error(s, a, r, t, s2, target)
                     TD_list = utils.flatten_array_as_list(TD_error)
 
                     # update transition priority
-                    buffer.update_priority(indices, TD_list)
+                    buffer.update_priorities(indices, TD_list)
 
                     # train the online network
                     loss, summary = online.train(s, a, r, t, s2, weights, target)
                     writer.add_summary(summary, global_step=episode)
                     target.update_target_network()
-                    buffer.rebalance()
 
 
                 # update exploring rate
