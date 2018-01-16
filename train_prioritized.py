@@ -13,7 +13,7 @@ import moviepy.editor as mpy
 
 import utils
 from max_heap import MaxHeap
-from prioritized_buffer_proportional import Experience as ReplayBuffer
+from rank_based import Experience as ReplayBuffer
 from dueling_prioritized import DuelingPrioritized
 
 # constants
@@ -44,7 +44,7 @@ def get_default_hparams(num_action=2, buffer_size=10**5):
         priority_epsilon=0.00001, # epsilon for calculating priority
         batch_size=1024,
         replay_period=128,
-        training_episodes=10**6,
+        training_episodes=300000,
         ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_prioritized/',
         summary_path='/tmp/md/ted_tmp/flappybird/summary_prioritized/',
         anim_path='/tmp/md/ted_tmp/flappybird/anim_prioritized/',
@@ -69,7 +69,15 @@ if __name__ == '__main__':
                                     online_network=None, training=True)
         target = DuelingPrioritized(sess, hps, online=False,
                                     online_network=online, training=True)
-        buffer = ReplayBuffer(hps.buffer_size, hps.batch_size, hps.alpha)
+        buffer_conf = {
+            'size': hps.buffer_size,
+            'alpha': hps.alpha,
+            'beta_zero': hps.beta,
+            'batch_size': hps.batch_size,
+            'learn_start': hps.buffer_size*10,
+            'steps': hps.training_episodes
+        }
+        buffer = ReplayBuffer()
         maxheap = MaxHeap()
         saver = tf.train.Saver(max_to_keep=15)
         writer = tf.summary.FileWriter(hps.summary_path, sess.graph)
@@ -92,7 +100,8 @@ if __name__ == '__main__':
 
         # populate buffer
         input_screens = [online.preprocess(env.getScreenGrayscale())]*4
-        while buffer.size() < hps.buffer_size:
+        records = 0
+        while records < hps.buffer_size:
             game = FlappyBird()
             env = PLE(
                 game,
@@ -120,7 +129,8 @@ if __name__ == '__main__':
 
                 # add the sample with maximal abs(TD_error) to replay buffer
                 sample, priority = maxheap.top()
-                buffer.add(sample, priority)
+                buffer.store(sample)
+                records += 1
 
         print('buffer full!')
         write_log(hps.log_path, 'buffer full!\n')
@@ -167,7 +177,7 @@ if __name__ == '__main__':
 
                 # add the sample with maximal abs(TD_error) to replay buffer
                 sample, priority = maxheap.top()
-                buffer.add(sample, priority)
+                buffer.store(sample)
 
                 cum_reward += r
                 step += 1
@@ -179,18 +189,19 @@ if __name__ == '__main__':
 
                 # sample batch and update online & target network
                 if (step-1) % hps.replay_period == 0:
-                    sample_list, weights, indices = buffer.select(hps.beta)
+                    sample_list, weights, indices = buffer.sample(episode)
                     s, a, r, t, s2 = utils.list_to_batches(sample_list)
                     TD_error = online.get_TD_error(s, a, r, t, s2, target)
                     TD_list = utils.flatten_array_as_list(TD_error)
 
                     # update transition priority
-                    buffer.priority_update(indices, TD_list)
+                    buffer.update_priority(indices, TD_list)
 
                     # train the online network
                     loss, summary = online.train(s, a, r, t, s2, weights, target)
                     writer.add_summary(summary, global_step=episode)
                     target.update_target_network()
+                    buffer.rebalance()
 
 
                 # update exploring rate
