@@ -57,7 +57,7 @@ if __name__ == '__main__':
     hps = get_default_hparams(num_action)
 
     config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.4
+    config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
         # initialize network and buffer
         online = DuelingNetwork(sess, hps, online=True,
@@ -68,6 +68,17 @@ if __name__ == '__main__':
         saver = tf.train.Saver(max_to_keep=15)
         writer = tf.summary.FileWriter(hps.summary_path, sess.graph)
         sess.run(tf.global_variables_initializer())
+
+        # restore previously stored checkpoint
+        ckpt = tf.train.get_checkpoint_state(hps.ckpt_path)
+        init_episode = 0
+        if ckpt and ckpt.model_checkpoint_path:
+            # if checkpoint exists
+            print('restore from ', ckpt.model_checkpoint_path)
+            write_log(hps.log_path, 'restore from '+ckpt.model_checkpoint_path+'\n')
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            # assume the name of checkpoint is like '.../ddqn-1000'
+            init_episode = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1])
 
         # copy online network
         target.copy_online_network()
@@ -95,18 +106,7 @@ if __name__ == '__main__':
         print('buffer full!')
         write_log(hps.log_path, 'buffer full!\n')
 
-        # restore previously stored checkpoint
-        ckpt = tf.train.get_checkpoint_state(hps.ckpt_path)
-        init_episode = 0
-        if ckpt and ckpt.model_checkpoint_path:
-            # if checkpoint exists
-            print('restore from ', ckpt.model_checkpoint_path)
-            write_log(hps.log_path, 'restore from '+ckpt.model_checkpoint_path+'\n')
-            saver.restore(sess, ckpt.model_checkpoint_path)
-            # assume the name of checkpoint is like '.../ddqn-1000'
-            init_episode = int(ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1])
-
-
+        # begin trial
         episode = init_episode
         update_global_step = tf.assign(online.global_step, episode)
         for episode in range(init_episode, hps.training_episodes):
