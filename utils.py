@@ -3,13 +3,12 @@ import os
 import numpy as np
 import itertools
 
-def list_to_batches(sample_batch):
-    array = np.asarray(sample_batch)
-    s = array[:,0].reshape(-1,1)
-    a = array[:,1].reshape(-1,1)
-    r = array[:,2].reshape(-1,1)
-    t = array[:,3].reshape(-1,1)
-    s2 = array[:,4].reshape(-1,1)
+def list_to_batches(sample_list):
+    s = np.asarray([_[0] for _ in sample_list])
+    a = np.asarray([_[1] for _ in sample_list])
+    r = np.asarray([_[2] for _ in sample_list])
+    t = np.asarray([_[3] for _ in sample_list])
+    s2 = np.asarray([_[4] for _ in sample_list])
 
     return s, a, r, t, s2
 

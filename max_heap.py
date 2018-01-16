@@ -15,8 +15,8 @@ class MaxHeap(object):
         reversed = (-tup[0],) + tup[1:]
         heapq.heappush(self.heap, reversed)
 
-    def pop(self):
-        tup = heapq.heappop(self.heap)
+    def top(self):
+        tup = self.heap[0]
         sample = tup[1:]
         priority = -tup[0]
         return sample, priority

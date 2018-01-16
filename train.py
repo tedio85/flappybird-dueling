@@ -84,7 +84,7 @@ if __name__ == '__main__':
             env.reset_game()
             print('current buffer size: {}/{}'.format(buffer.size(), hps.batch_size*5))
             write_log(hps.log_path,
-                      'current buffer size: {}/{}\n'.format(buffer.size(), hps.batch_size*10))
+                      'current buffer size: {}/{}\n'.format(buffer.size(), hps.batch_size*5))
 
             while not env.game_over():
                 a = target.select_action(input_screens[-4:])

@@ -1,11 +1,12 @@
+import math
 import numpy as np
 import tensorflow as tf
 
 from dueling_network import DuelingNetwork
 
-DuelingPrioritized(DuelingNetwork):
+class DuelingPrioritized(DuelingNetwork):
     def __init__(self, sess, hps, online=True, online_network=None, training=True):
-        super().__init__(self, sess, hps, online, online_network, training)
+        super().__init__(sess, hps, online, online_network, training)
 
     def _build_train_op(self):
         targetQ = tf.placeholder(tf.float32, shape=[None, 1], name='y_i') # y_i
@@ -19,7 +20,7 @@ DuelingPrioritized(DuelingNetwork):
 
 
         # accumulate weight change(delta)
-        loss = tf.reduce_sum(weigths * TD_error * self.estimatedQ)
+        loss = tf.reduce_sum(weights * TD_error * self.estimatedQ)
         self.loss = loss
 
 
@@ -44,12 +45,25 @@ DuelingPrioritized(DuelingNetwork):
     def get_TD_error(self, s, a, r, t, s2, target_network):
         if not self.online:
             raise Exception('get_TD_error() is for the online network, not the target network')
+        
+        s = np.asarray(s)
+        s2 = np.asarray(s2)
 
+        if len(s.shape) < 4:
+            s = s[None, :]
+        if len(s2.shape) < 4:
+            s2 = s2[None, :]
+            
+        
         # get argmax_a' Q(s',a' |theta)
         feed_online = { self.input_state: s2 }
         a_max = self.sess.run(self.argmax_a, feed_dict=feed_online)
 
         # get y_i
+        if np.isscalar(a):
+            a = np.asarray(a).reshape(-1,)
+            r = np.asarray(r).reshape(-1,)
+            t = np.asarray(t).reshape(-1,)
         targetQ = target_network.get_targetQ(s2, a_max, r, t)
 
         feed_online_yi = {
@@ -69,6 +83,15 @@ DuelingPrioritized(DuelingNetwork):
         """Used for online network training"""
         if not self.online:
             raise Exception('train() is for the online network, not the target network')
+            
+        s = np.asarray(s)
+        s2 = np.asarray(s2)
+        
+        if len(s.shape) < 4:
+            s = s[None, :]
+        if len(s2.shape) < 4:
+            s2 = s2[None, :]
+            
 
         # get argmax_a' Q(s',a' |theta)
         feed_online = { self.input_state: s2 }

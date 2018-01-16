@@ -1,6 +1,8 @@
 """
-This file is taken directly from
+This file is taken from
 https://github.com/takoika/PrioritizedExperienceReplay/blob/master/proportional.py
+
+modified to add self.count
 """
 import numpy
 import random
@@ -32,6 +34,10 @@ class Experience(object):
         self.memory_size = memory_size
         self.batch_size = batch_size
         self.alpha = alpha
+        self.count = 0
+        
+    def size(self):
+        return self.count
 
     def add(self, data, priority):
         """ Add new sample.
@@ -44,6 +50,7 @@ class Experience(object):
             sample's priority
         """
         self.tree.add(data, priority**self.alpha)
+        self.count += 1
 
     def select(self, beta):
         """ The method return samples randomly.
