@@ -103,7 +103,7 @@ if __name__ == '__main__':
         if os.path.exists(hps.buffer_savepath):
             buffer.load(hps.buffer_savepath)
             records = hps.buffer_size + 100
-                
+
         while records < hps.buffer_size+100:
             game = FlappyBird()
             env = PLE(
@@ -225,6 +225,8 @@ if __name__ == '__main__':
             # save checkpoint
             if episode % SAVE_CHECKPOINT_AFTER_EPISODES == 0:
                 saver.save(sess, os.path.join(hps.ckpt_path, 'prioritized.ckpt-{}'.format(episode)))
+                buffer.save(hps.buffer_savepath)
+                write_log(hps.log_path, 'saving buffer at {}\n'.format(hps.buffer_savepath))
 
             # save video clip
             if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
