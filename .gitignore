@@ -6,3 +6,5 @@ screenlog.0
 evaluate.pyc
 scores.csv
 evaluate.ipynb
+evaluate_prioritized.ipynb
+scores_prioritized.csv
