@@ -1,180 +1,206 @@
-import numpy as np
+#!/usr/bin/python
+# -*- encoding=utf-8 -*-
+# author: Ian
+# e-mail: stmayue@gmail.com
+# description: 
+
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import absolute_import
+
+import sys
+import math
 import random
+import numpy as np
 
-from common.segment_tree import SumSegmentTree, MinSegmentTree
+import binary_heap
+
+class BetaSchedule(object):
+    def __init__(self, conf=None):
+        self.batch_size = int(conf['batch_size'] if 'batch_size' in conf else 32)
+
+        self.beta_zero = conf['beta_zero'] if 'beta_zero' in conf else 0.5
+        self.learn_start = int(conf['learn_start'] if 'learn_start' in conf else 1000)
+        # http://www.evernote.com/l/ACnDUVK3ShVEO7fDm38joUGNhDik3fFaB5o/
+        self.total_steps = int(conf['total_steps'] if 'total_steps' in conf else 100000)
+        self.beta_grad = (1 - self.beta_zero) / (self.total_steps - self.learn_start)
+
+    def get_beta(self, global_step):
+        # beta, increase by global_step, max 1
+        beta = min(self.beta_zero + (global_step - self.learn_start - 1) * self.beta_grad, 1)
+        return beta, self.batch_size
 
 
-class ReplayBuffer(object):
-    def __init__(self, size):
-        """Create a Replay buffer.
-        Parameters
-        ----------
-        size: int
-            Max number of transitions to store in the buffer. When the buffer
-            overflows the old memories are dropped.
+class Experience(object):
+
+    def __init__(self, conf = None):
+        self.beta_sched = BetaSchedule(conf)
+        print("Initializing rank_based.Experience()")
+        print("conf={}".format(str(conf)))
+        if not conf is None:
+            self.size = int(conf['size'])
+            self.replace_flag = conf['replace_old'] if 'replace_old' in conf else True
+
+            self.alpha = conf['alpha'] if 'alpha' in conf else 0.7
+
+            self.index = 0
+            self.record_size = 0
+            self.isFull = False
+
+            self._experience = {}
+            self.priority_queue = binary_heap.BinaryHeap(self.size)
+
+            self.build_distribution()
+
+
+
+    def build_distribution(self):
+        # P(i) = (rank i) ^ (-alpha) / sum ((rank i) ^ (-alpha))
+        pdf = list(
+            map(lambda x: math.pow(x, -self.alpha), range(1, self.size + 1))
+        )
+        pdf_sum = math.fsum(pdf)
+        self.power_law_distribution = list(map(lambda x: x / pdf_sum, pdf))
+
+
+    def save(self, filename):
+        data = np.array([
+            self.size,
+            self.replace_flag,
+            self.alpha,
+            self.beta_sched.beta_zero,
+            self.beta_sched.batch_size,
+            self.beta_sched.learn_start,
+            self.beta_sched.total_steps,
+            self.index,
+            self.record_size,
+            self.isFull,
+            self._experience,
+            self.priority_queue.priority_queue,
+            self.priority_queue.p2e,
+            self.priority_queue.e2p,
+            self.priority_queue.size
+        ])
+        np.save(filename, data)
+
+    def load(self, filename):
+        data = np.load(filename)
+        self.size, \
+        self.replace_flag, \
+        self.alpha, \
+        self.beta_sched.beta_zero, \
+        self.beta_sched.batch_size, \
+        self.beta_sched.learn_start, \
+        self.beta_sched.total_steps, \
+        self.index, \
+        self.record_size, \
+        self.isFull, \
+        self._experience, \
+        self.priority_queue.priority_queue, \
+        self.priority_queue.p2e,\
+        self.priority_queue.e2p, \
+        self.priority_queue.size = data
+        self.priority_queue.balance_tree()
+
+
+    def fix_index(self):
         """
-        self._storage = []
-        self._maxsize = size
-        self._next_idx = 0
-
-    def __len__(self):
-        return len(self._storage)
-
-    def add(self, obs_t, action, reward, obs_tp1, done):
-        data = (obs_t, action, reward, obs_tp1, done)
-
-        if self._next_idx >= len(self._storage):
-            self._storage.append(data)
+        get next insert index
+        :return: index, int
+        """
+        if self.record_size <= self.size:
+            self.record_size += 1
+        if self.index % self.size == 0:
+            self.isFull = True if len(self._experience) == self.size else False
+            if self.replace_flag:
+                self.index = 1
+                return self.index
+            else:
+                sys.stderr.write('Experience replay buff is full and replace is set to FALSE!\n')
+                return -1
         else:
-            self._storage[self._next_idx] = data
-        self._next_idx = (self._next_idx + 1) % self._maxsize
+            self.index += 1
+            return self.index
 
-    def _encode_sample(self, idxes):
-        obses_t, actions, rewards, obses_tp1, dones = [], [], [], [], []
-        for i in idxes:
-            data = self._storage[i]
-            obs_t, action, reward, obs_tp1, done = data
-            obses_t.append(np.array(obs_t, copy=False))
-            actions.append(np.array(action, copy=False))
-            rewards.append(reward)
-            obses_tp1.append(np.array(obs_tp1, copy=False))
-            dones.append(done)
-        return np.array(obses_t), np.array(actions), np.array(rewards, dtype=np.float32), \
-               np.array(obses_tp1), np.array(dones, dtype=np.float32)
-
-    def sample(self, batch_size):
-        """Sample a batch of experiences.
-        Parameters
-        ----------
-        batch_size: int
-            How many transitions to sample.
-        Returns
-        -------
-        obs_batch: np.array
-            batch of observations
-        act_batch: np.array
-            batch of actions executed given obs_batch
-        rew_batch: np.array
-            rewards received as results of executing act_batch
-        next_obs_batch: np.array
-            next set of observations seen after executing act_batch
-        done_mask: np.array
-            done_mask[i] = 1 if executing act_batch[i] resulted in
-            the end of an episode and 0 otherwise.
+    def store(self, experience):
         """
-        idxes = [random.randint(0, len(self._storage) - 1) for _ in range(batch_size)]
-        return self._encode_sample(idxes)
-
-
-class PrioritizedReplayBuffer(ReplayBuffer):
-    def __init__(self, size, alpha):
-        """Create Prioritized Replay buffer.
-        Parameters
-        ----------
-        size: int
-            Max number of transitions to store in the buffer. When the buffer
-            overflows the old memories are dropped.
-        alpha: float
-            how much prioritization is used
-            (0 - no prioritization, 1 - full prioritization)
-        See Also
-        --------
-        ReplayBuffer.__init__
+        store experience, suggest that experience is a tuple of (s1, a, r, s2, t)
+        so each experience is valid
+        :param experience: maybe a tuple, or list
+        :return: bool, indicate insert status
         """
-        super(PrioritizedReplayBuffer, self).__init__(size)
-        assert alpha > 0
-        self._alpha = alpha
+        insert_index = self.fix_index()
+        if insert_index > 0:
+            if insert_index in self._experience:
+                del self._experience[insert_index]
+            self._experience[insert_index] = experience
+            # add to priority queue
+            priority = self.priority_queue.get_max_priority()
+            self.priority_queue.update(priority, insert_index)
+            return True
+        else:
+            sys.stderr.write('Insert failed\n')
+            return False
 
-        it_capacity = 1
-        while it_capacity < size:
-            it_capacity *= 2
-
-        self._it_sum = SumSegmentTree(it_capacity)
-        self._it_min = MinSegmentTree(it_capacity)
-        self._max_priority = 1.0
-
-    def add(self, *args, **kwargs):
-        """See ReplayBuffer.store_effect"""
-        idx = self._next_idx
-        super().add(*args, **kwargs)
-        self._it_sum[idx] = self._max_priority ** self._alpha
-        self._it_min[idx] = self._max_priority ** self._alpha
-
-    def _sample_proportional(self, batch_size):
-        res = []
-        for _ in range(batch_size):
-            # TODO(szymon): should we ensure no repeats?
-            mass = random.random() * self._it_sum.sum(0, len(self._storage) - 1)
-            idx = self._it_sum.find_prefixsum_idx(mass)
-            res.append(idx)
-        return res
-
-    def sample(self, batch_size, beta):
-        """Sample a batch of experiences.
-        compared to ReplayBuffer.sample
-        it also returns importance weights and idxes
-        of sampled experiences.
-        Parameters
-        ----------
-        batch_size: int
-            How many transitions to sample.
-        beta: float
-            To what degree to use importance weights
-            (0 - no corrections, 1 - full correction)
-        Returns
-        -------
-        obs_batch: np.array
-            batch of observations
-        act_batch: np.array
-            batch of actions executed given obs_batch
-        rew_batch: np.array
-            rewards received as results of executing act_batch
-        next_obs_batch: np.array
-            next set of observations seen after executing act_batch
-        done_mask: np.array
-            done_mask[i] = 1 if executing act_batch[i] resulted in
-            the end of an episode and 0 otherwise.
-        weights: np.array
-            Array of shape (batch_size,) and dtype np.float32
-            denoting importance weight of each sampled transition
-        idxes: np.array
-            Array of shape (batch_size,) and dtype np.int32
-            idexes in buffer of sampled experiences
+    def retrieve(self, indices):
         """
-        assert beta > 0
-
-        idxes = self._sample_proportional(batch_size)
-
-        weights = []
-        p_min = self._it_min.min() / self._it_sum.sum()
-        max_weight = (p_min * len(self._storage)) ** (-beta)
-
-        for idx in idxes:
-            p_sample = self._it_sum[idx] / self._it_sum.sum()
-            weight = (p_sample * len(self._storage)) ** (-beta)
-            weights.append(weight / max_weight)
-        weights = np.array(weights, dtype=np.float32)
-        encoded_sample = self._encode_sample(idxes)
-        return tuple(list(encoded_sample) + [weights, idxes])
-
-    def update_priorities(self, idxes, priorities):
-        """Update priorities of sampled transitions.
-        sets priority of transition at index idxes[i] in buffer
-        to priorities[i].
-        Parameters
-        ----------
-        idxes: [int]
-            List of idxes of sampled transitions
-        priorities: [float]
-            List of updated priorities corresponding to
-            transitions at the sampled idxes denoted by
-            variable `idxes`.
+        get experience from indices
+        :param indices: list of experience id
+        :return: experience replay sample
         """
-        assert len(idxes) == len(priorities)
-        for idx, priority in zip(idxes, priorities):
-            assert priority > 0
-            assert 0 <= idx < len(self._storage)
-            self._it_sum[idx] = priority ** self._alpha
-            self._it_min[idx] = priority ** self._alpha
+        return [self._experience[v] for v in indices]
 
-            self._max_priority = max(self._max_priority, priority)
+    def rebalance(self):
+        """
+        rebalance priority queue
+        :return: None
+        """
+        self.priority_queue.balance_tree()
+
+    def update_priority(self, indices, delta):
+        """
+        update priority according indices and deltas
+        :param indices: list of experience id
+        :param delta: list of delta, order correspond to indices
+        :return: None
+        """
+        for i in range(0, len(indices)):
+            self.priority_queue.update(math.fabs(delta[i]), indices[i])
+
+    def sample(self, global_step, batch_size=None):
+        beta, batch_size = self.beta_sched.get_beta(global_step)
+        return self.select(beta, batch_size=batch_size)
+
+    def select(self, beta, batch_size):
+        """
+        sample a mini batch from experience replay
+        :param beta
+        :return: experience, list, samples
+        :return: w, list, weights
+        :return: rank_e_id, list, samples id, used for update priority
+        """
+
+        distribution = self.power_law_distribution
+        rank_list = []
+        # sample from k segments
+        for n in range(batch_size):
+            index = random.randint(1, self.priority_queue.size)
+            rank_list.append(index)
+
+        # find all alpha pow, notice that pdf is a list, start from 0
+        alpha_pow = [distribution[v - 1] for v in rank_list]
+        # w = (N * P(i)) ^ (-beta) / max w
+        w = np.power(np.array(alpha_pow) * self.size, -beta)
+        w_max = max(w)
+        w = np.divide(w, w_max)
+        # rank list is priority id
+        # convert to experience id
+        rank_e_id = 0
+        try:
+            rank_e_id = self.priority_queue.priority_to_experience(rank_list)
+        except:
+            print('a')
+        # get experience id according rank_e_id
+        experience = self.retrieve(rank_e_id)
+        return experience, w, rank_e_id

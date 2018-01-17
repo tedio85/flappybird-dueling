@@ -13,7 +13,7 @@ import moviepy.editor as mpy
 
 import utils
 from max_heap import MaxHeap
-from prioritized_buffer import PrioritizedReplayBuffer as ReplayBuffer
+from prioritized_buffer import Experience as ReplayBuffer
 from dueling_prioritized import DuelingPrioritized
 
 # constants
@@ -39,8 +39,8 @@ def get_default_hparams(num_action=2, buffer_size=10**5):
         discount_factor=0.99,
         tau=0.001,
         lr=1e-4,
-        alpha=0.6, # alpha for replay buffer
-        beta=0.4, # beta for replay buffer
+        alpha=0.7, # alpha for replay buffer
+        beta=0.5, # beta for replay buffer
         priority_epsilon=0.00001, # epsilon for calculating priority
         batch_size=1024,
         replay_period=128,
@@ -69,7 +69,13 @@ if __name__ == '__main__':
                                     online_network=None, training=True)
         target = DuelingPrioritized(sess, hps, online=False,
                                     online_network=online, training=True)
-        buffer = ReplayBuffer(hps.buffer_size, hps.alpha)
+        maxheap = MaxHeap()
+        buffer_conf = {
+            'size': hps.buffer_size,
+            'replace_old': True,
+            'alpha': hps.alpha
+        }
+        buffer = ReplayBuffer(conf=buffer_conf)
         saver = tf.train.Saver(max_to_keep=15)
         writer = tf.summary.FileWriter(hps.summary_path, sess.graph)
         sess.run(tf.global_variables_initializer())
@@ -92,7 +98,7 @@ if __name__ == '__main__':
         # populate buffer
         input_screens = [online.preprocess(env.getScreenGrayscale())]*4
         records = 0
-        while records < hps.buffer_size:
+        while records < hps.buffer_size+100:
             game = FlappyBird()
             env = PLE(
                 game,
@@ -119,9 +125,10 @@ if __name__ == '__main__':
 
                 # add the sample with maximal abs(TD_error) to replay buffer
                 sample, priority = maxheap.top()
-                buffer.add(*sample)
+                buffer.store(sample)
                 records += 1
-
+        
+        buffer.rebalance()
         print('buffer full!')
         write_log(hps.log_path, 'buffer full!\n')
 
@@ -167,7 +174,7 @@ if __name__ == '__main__':
 
                 # add the sample with maximal abs(TD_error) to replay buffer
                 sample, priority = maxheap.top()
-                buffer.add(*sample)
+                buffer.store(sample)
 
                 cum_reward += r
                 step += 1
@@ -179,30 +186,31 @@ if __name__ == '__main__':
 
                 # sample batch and update online & target network
                 if (step-1) % hps.replay_period == 0:
-                    s, a, r, s2, t, weights, indices = buffer.sample(hps.batch_size, hps.beta)
-                    s, a, r, t, s2 = utils.list_to_batches(sample_list)
+                    experience, weights, indices = buffer.sample(episode, hps.batch_size)
+                    s, a, r, s2, t = utils.list_to_batches(experience)
                     TD_error = online.get_TD_error(s, a, r, t, s2, target)
                     TD_list = utils.flatten_array_as_list(TD_error)
 
                     # update transition priority
-                    buffer.update_priorities(indices, TD_list)
+                    buffer.update_priority(indices, TD_list)
 
                     # train the online network
                     loss, summary = online.train(s, a, r, t, s2, weights, target)
                     writer.add_summary(summary, global_step=episode)
                     target.update_target_network()
+                    buffer.rebalance()
 
 
-                # update exploring rate
-                online.update_exploring_rate(episode)
-                target.update_exploring_rate(episode)
+            # update exploring rate
+            online.update_exploring_rate(episode)
+            target.update_exploring_rate(episode)
 
-                # log information and summaries
-                log_info = \
-                "[{}] time live:{} cumulated reward: {} exploring rate: {:.4f} loss: {:.4f}".format(
+            # log information and summaries
+            log_info = \
+            "[{}] time live:{} cumulated reward: {} exploring rate: {:.4f} loss: {:.4f}".format(
                                             episode, step, cum_reward, online.exp_rate, loss)
-                print(log_info)
-                write_log(hps.log_path, log_info+'\n')
+            print(log_info)
+            write_log(hps.log_path, log_info+'\n')
 
 
             # save checkpoint
