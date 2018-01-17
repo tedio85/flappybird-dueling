@@ -45,6 +45,7 @@ def get_default_hparams(num_action=2, buffer_size=10**5):
         batch_size=1024,
         replay_period=128,
         training_episodes=300000,
+        buffer_savepath='/tmp/md/ted_tmp/flappybird/buffer.npy',
         ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_prioritized/',
         summary_path='/tmp/md/ted_tmp/flappybird/summary_prioritized/',
         anim_path='/tmp/md/ted_tmp/flappybird/anim_prioritized/',
@@ -98,6 +99,11 @@ if __name__ == '__main__':
         # populate buffer
         input_screens = [online.preprocess(env.getScreenGrayscale())]*4
         records = 0
+        # load buffer if exists
+        if os.path.exists(hps.buffer_savepath):
+            buffer.load(hps.buffer_savepath)
+            records = hps.buffer_size + 100
+                
         while records < hps.buffer_size+100:
             game = FlappyBird()
             env = PLE(
@@ -129,8 +135,11 @@ if __name__ == '__main__':
                 records += 1
 
         buffer.rebalance()
+        buffer.save(hps.buffer_savepath)
         print('buffer full!')
+        print('saving buffer at {}'.format(hps.buffer_savepath))
         write_log(hps.log_path, 'buffer full!\n')
+        write_log(hps.log_path, 'saving buffer at {}\n'.format(hps.buffer_savepath))
 
 
         # begin trial and update
