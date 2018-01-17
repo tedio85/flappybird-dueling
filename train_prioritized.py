@@ -119,7 +119,7 @@ if __name__ == '__main__':
                 # add (abs(priority)+e, s, a, r, t, s2) to max heap
                 td = online.get_TD_error(input_screens[-5:-1], a, r, te, input_screens[-4:],\
                                                target)
-                priority = np.absolute(td) + hps.priority_epsilon
+                priority = np.absolute(td)
                 data = (priority, input_screens[-5:-1], a, r, input_screens[-4:], te)
                 maxheap.push(data)
 
@@ -127,7 +127,7 @@ if __name__ == '__main__':
                 sample, priority = maxheap.top()
                 buffer.store(sample)
                 records += 1
-        
+
         buffer.rebalance()
         print('buffer full!')
         write_log(hps.log_path, 'buffer full!\n')
@@ -168,7 +168,7 @@ if __name__ == '__main__':
                 # add (abs(priority), s, a, r, t, s2) to max heap
                 td = online.get_TD_error(input_screens[-5:-1], a, r, te, input_screens[-4:],\
                                                target)
-                priority = np.absolute(td) + hps.priority_epsilon
+                priority = np.absolute(td)
                 data = (priority, input_screens[-5:-1], a, r, input_screens[-4:], te)
                 maxheap.push(data)
 

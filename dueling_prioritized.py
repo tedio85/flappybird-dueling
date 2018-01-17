@@ -20,7 +20,8 @@ class DuelingPrioritized(DuelingNetwork):
 
 
         # accumulate weight change(delta)
-        loss = tf.reduce_sum(weights * TD_error * self.estimatedQ)
+        loss = tf.reduce_mean(weights * tf.square(targetQ - self.estimatedQ))
+        tf.summary.histogram(weights.op.name, weights)
         self.loss = loss
 
 
@@ -45,7 +46,7 @@ class DuelingPrioritized(DuelingNetwork):
     def get_TD_error(self, s, a, r, t, s2, target_network):
         if not self.online:
             raise Exception('get_TD_error() is for the online network, not the target network')
-        
+
         s = np.asarray(s)
         s2 = np.asarray(s2)
 
@@ -53,8 +54,8 @@ class DuelingPrioritized(DuelingNetwork):
             s = s[None, :]
         if len(s2.shape) < 4:
             s2 = s2[None, :]
-            
-        
+
+
         # get argmax_a' Q(s',a' |theta)
         feed_online = { self.input_state: s2 }
         a_max = self.sess.run(self.argmax_a, feed_dict=feed_online)
@@ -83,15 +84,15 @@ class DuelingPrioritized(DuelingNetwork):
         """Used for online network training"""
         if not self.online:
             raise Exception('train() is for the online network, not the target network')
-            
+
         s = np.asarray(s)
         s2 = np.asarray(s2)
-        
+
         if len(s.shape) < 4:
             s = s[None, :]
         if len(s2.shape) < 4:
             s2 = s2[None, :]
-            
+
 
         # get argmax_a' Q(s',a' |theta)
         feed_online = { self.input_state: s2 }
