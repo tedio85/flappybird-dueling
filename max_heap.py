@@ -13,7 +13,10 @@ class MaxHeap(object):
         """
         tup = sample
         reversed = (-tup[0],) + tup[1:]
-        heapq.heappush(self.heap, reversed)
+        try:
+            heapq.heappush(self.heap, reversed)
+        except:
+            print('heap_push returned an error')
 
     def top(self):
         tup = self.heap[0]
