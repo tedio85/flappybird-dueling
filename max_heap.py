@@ -16,6 +16,8 @@ class MaxHeap(object):
         try:
             heapq.heappush(self.heap, reversed)
         except:
+            for i in reversed:
+                print(i)
             print('heap_push returned an error')
 
     def top(self):
