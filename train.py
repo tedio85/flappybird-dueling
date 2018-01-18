@@ -24,7 +24,7 @@ def write_log(log_dir, log_msg):
         f.write(log_msg)
 
 
-def get_default_hparams(num_action=2, buffer_size=2*10**4):
+def get_default_hparams(num_action=2, buffer_size=5*10**4):
     hparams = tf.contrib.training.HParams(
         buffer_size=buffer_size,
         num_action=num_action,
