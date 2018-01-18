@@ -39,6 +39,7 @@ def get_default_hparams(num_action=2, buffer_size=2*10**4):
         tau=0.001,
         lr=1e-4,
         batch_size=1024,
+        replay_period=64,
         training_episodes=10**6,
         ckpt_path='/tmp/md/ted_tmp/flappybird/checkpoint_ddqn/',
         summary_path='/tmp/md/ted_tmp/flappybird/summary_ddqn/',
@@ -146,10 +147,11 @@ if __name__ == '__main__':
 
 
 
-            # sample batch and update online & target network
-            s, a, r, t, s2 = buffer.sample_batch(hps.batch_size)
-            loss, summary = online.train(s, a, r, t, s2, target)
-            target.update_target_network()
+                # sample batch and update online & target network
+                if (step-1) % hps.replay_period == 0:
+                    s, a, r, t, s2 = buffer.sample_batch(hps.batch_size)
+                    loss, summary = online.train(s, a, r, t, s2, target)
+                    target.update_target_network()
 
 
             # update exploring rate
