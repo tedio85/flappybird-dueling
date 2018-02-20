@@ -1,6 +1,6 @@
 # flappybird-dueling
 
-Project for the course "Deep Learning"
+Project for the course "Deep Learning"  
 `train.py` - for  training  
 `dueling_network.py` - model atrchitecture  
 `replay_buffer.py` - replay buffer  
