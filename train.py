@@ -141,16 +141,17 @@ if __name__ == '__main__':
                 cum_reward += r
                 step += 1
 
-                 # record frame
+                # record frame
                 if episode % SAVE_VIDEO_AFTER_EPISODES == 0:
                     video_frames.append(env.getScreenRGB())
 
-
+                    
+                
+                s, a, r, t, s2 = buffer.sample_batch(hps.batch_size)
+                loss, summary = online.train(s, a, r, t, s2, target)
 
                 # sample batch and update online & target network
                 if (step-1) % hps.replay_period == 0:
-                    s, a, r, t, s2 = buffer.sample_batch(hps.batch_size)
-                    loss, summary = online.train(s, a, r, t, s2, target)
                     target.update_target_network()
 
 
